@@ -49,7 +49,7 @@ CALL FUNCTION 'SAPSCRIPT_GET_GRAPHIC_BDS'
     OTHERS         = 4.
 
 IF SY-SUBRC <> 0.
-  MESSAGE 'BMAP File not found'
+  MESSAGE 'BMAP File not found.'
     TYPE 'I' DISPLAY LIKE 'E'.
 
   EXIT.
