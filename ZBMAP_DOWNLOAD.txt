@@ -1,0 +1,123 @@
+*&-------------------------------------------------------------------------*
+*& Report Name  : ZBMAP_DOWNLOAD
+*&-------------------------------------------------------------------------*
+
+REPORT  ZBMAP_DOWNLOAD.
+
+DATA : L_BYTECOUNT TYPE I,
+       L_TDBTYPE   LIKE STXBITMAPS-TDBTYPE,
+       L_CONTENT   TYPE STANDARD TABLE OF BAPICONTEN INITIAL SIZE 0.
+
+DATA:  fullpath        TYPE STRING,
+       filename        TYPE STRING,
+       path            TYPE STRING,
+       user_action     TYPE i,
+       extension       TYPE STRING VALUE 'bmp',
+       full_path       TYPE RLGRAP-FILENAME,
+       file_name       TYPE STXBITMAPS-TDNAME.
+
+CLEAR: fullpath, filename, path, user_action, full_path, file_name.
+
+DATA: GRAPHIC_SIZE TYPE I.
+
+DATA: BEGIN OF GRAPHIC_TABLE OCCURS 0,
+LINE(255) TYPE X,
+END OF GRAPHIC_TABLE.
+
+SELECTION-SCREEN BEGIN OF BLOCK B0 WITH FRAME TITLE TXT001.
+  PARAMETERS: P_FILE TYPE STRING OBLIGATORY.
+SELECTION-SCREEN END   OF BLOCK B0.
+
+START-OF-SELECTION.
+
+file_name = P_FILE.
+
+CALL FUNCTION 'SAPSCRIPT_GET_GRAPHIC_BDS'
+  EXPORTING
+    I_OBJECT       = 'GRAPHICS'
+    I_NAME         = file_name
+    I_ID           = 'BMAP'
+    I_BTYPE        = 'BCOL'
+  IMPORTING
+    E_BYTECOUNT    = L_BYTECOUNT
+  TABLES
+    CONTENT        = L_CONTENT
+  EXCEPTIONS
+    NOT_FOUND      = 1
+    BDS_GET_FAILED = 2
+    BDS_NO_CONTENT = 3
+    OTHERS         = 4.
+
+IF SY-SUBRC <> 0.
+  MESSAGE 'File not found'
+    TYPE 'I' DISPLAY LIKE 'E'.
+
+  EXIT.
+ENDIF.
+
+CALL FUNCTION 'SAPSCRIPT_CONVERT_BITMAP'
+  EXPORTING
+    OLD_FORMAT               = 'BDS'
+    NEW_FORMAT               = 'BMP'
+    BITMAP_FILE_BYTECOUNT_IN = L_BYTECOUNT
+  IMPORTING
+    BITMAP_FILE_BYTECOUNT    = GRAPHIC_SIZE
+  TABLES
+    BDS_BITMAP_FILE          = L_CONTENT
+    BITMAP_FILE              = GRAPHIC_TABLE
+  EXCEPTIONS
+    OTHERS                   = 1.
+
+filename = P_FILE.
+
+CALL METHOD cl_gui_frontend_services=>file_save_dialog
+  EXPORTING
+    window_title         = 'Download'
+    with_encoding        = 'X'
+    initial_directory    = 'C:\Users\Desktop'
+    default_extension    = extension
+    default_file_name    = filename
+  CHANGING
+    filename             = filename
+    path                 = path
+    fullpath             = fullpath
+    user_action          = user_action
+  EXCEPTIONS
+    cntl_error           = 1
+    error_no_gui         = 2
+    not_supported_by_gui = 3
+    OTHERS               = 4.
+
+IF SY-SUBRC NE 0.
+  MESSAGE `Can't download the BMP File`
+   TYPE 'S' DISPLAY LIKE 'E'.
+  EXIT.
+ENDIF.
+"End of Open dialog box to choose file destination
+
+"Download File
+IF user_action EQ cl_gui_frontend_services=>action_ok.
+
+  full_path = fullpath.
+
+  CALL FUNCTION 'WS_DOWNLOAD'
+    EXPORTING
+      BIN_FILESIZE            = GRAPHIC_SIZE
+      FILENAME                = full_path
+      FILETYPE                = 'BIN'
+    TABLES
+      DATA_TAB                = GRAPHIC_TABLE
+    EXCEPTIONS
+      INVALID_FILESIZE        = 1
+      INVALID_TABLE_WIDTH     = 2
+      INVALID_TYPE            = 3
+      NO_BATCH                = 4
+      UNKNOWN_ERROR           = 5
+      GUI_REFUSE_FILETRANSFER = 6.
+
+  IF SY-SUBRC <> 0.
+    MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
+            WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
+  ENDIF.
+
+ENDIF.
